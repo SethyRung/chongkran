@@ -4,82 +4,76 @@ Full-stack recipe web app. Single Nuxt 4 deploy — Nitro server routes + Vue cl
 
 ## Commands
 
-| Command                                      | What                                                                                                                                            |
-| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bun dev`                                    | Dev server (http://localhost:3000)                                                                                                              |
-| `bun build` / `bun generate` / `bun preview` | Production / static / preview                                                                                                                   |
-| `bun predeploy`                              | `bun hub:db:migrate && bun build` — run before deploy                                                                                           |
-| `bun lint` / `bun lint:fix`                  | oxlint (`oxlint.config.ts`)                                                                                                                     |
-| `bun fmt` / `bun fmt:check`                  | oxfmt (`oxfmt.config.ts`, 2-space, double quotes, trailing commas, 100 char)                                                                    |
-| `bun typecheck`                              | `nuxt typecheck` (run before opening a PR — catches the class of bugs that lint/fmt miss)                                                       |
-| `bun test`                                   | All Vitest projects                                                                                                                             |
-| `bun test:unit`                              | Pure-function tests, ~150 ms total                                                                                                              |
-| `bun test:nuxt`                              | Server-handler tests under Nuxt, **runs serially via `--no-file-parallelism`** (~5 min) — see Testing below                                     |
-| `bunx nuxt db generate`                      | Regenerate Drizzle migration from `server/db/schema.ts` (NuxtHub writes to `server/db/migrations/postgresql/`). **Never hand-roll migrations.** |
-| `bunx nuxt db migrate`                       | Apply pending migrations                                                                                                                        |
-| `bun hub:task db:seed`                       | Run the seed task (creates `admin@chongkran.com` / `Password123!`)                                                                              |
-| `bun docker-compose up -d`                   | Start Postgres                                                                                                                                  |
+| Command                        | What                                                                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `bun dev`                      | Dev server (http://localhost:3000)                                                                                      |
+| `bun run build`                | Production build. **Use `bun run`** — a bare `bun build` hits Bun's built-in bundler instead of the package script.     |
+| `bun generate` / `bun preview` | Static / preview                                                                                                        |
+| `bun predeploy`                | `bun db:migrate && bun run build`                                                                                       |
+| `bun lint` / `bun lint:fix`    | oxlint (`oxlint.config.ts`)                                                                                             |
+| `bun fmt` / `bun fmt:check`    | oxfmt (`oxfmt.config.ts`: 2-space, double quotes, trailing commas, 100 cols)                                            |
+| `bun typecheck`                | `nuxt typecheck` — run before opening a PR                                                                              |
+| `bun test`                     | All Vitest projects                                                                                                     |
+| `bun test:unit`                | Pure-function tests (`test/unit/`), sub-second                                                                          |
+| `bun test:nuxt`                | Server-handler tests (`test/nuxt/`), each file boots its own Nitro server (~5 min)                                      |
+| `bun db:generate`              | Regenerate the Drizzle migration from `server/db/schema.ts` (**never hand-roll migrations**)                            |
+| `bun db:migrate`               | Apply pending migrations                                                                                                |
+| `bunx nitro task run db:seed`  | Won't work — run `curl -X POST http://localhost:3000/_nitro/tasks/db:seed` while `bun dev` is up                        |
+| `bun run docker-compose up -d` | Start local Postgres. A bare `bun docker-compose` fails ("Script not found"); `run` falls through to the system binary. |
+
+`bun db:*` wrap the `nuxt-hub` CLI. There is **no** `nuxt db` subcommand (nuxi prints its help and exits 0), and no `hub:db:*` / `hub:task` package scripts.
+
+Seeding creates `admin@chongkran.com` / `Password123!` plus a demo author, categories, and recipes.
 
 ## Architecture
 
-- **Single-tier Nitro server**: `server/api/<module>/<route>.{get,post,put,patch,delete}.ts` talks directly to Drizzle/Postgres. There is no BFF proxy layer. Better-Auth auto-mounts `/api/auth/*`.
-- **Better-Auth** config: `server/auth.config.ts` (defineServerAuth) and `app/auth.config.ts` (defineClientAuth with `adminClient()`). Auto-imports: `requireUserSession(event)`, `requireAdmin(event)`, `requireRole(event, role[])`, `refreshSessionCookieCache(event)` (server); `useUserSession()` (client).
-- **Sessions** in Postgres `session` table — no secondary storage (`hub.kv` and `auth.hubSecondaryStorage` are both off).
-- **Route protection** is declarative in `nuxt.config.ts → routeRules`:
-  - `/admin/**` → admin only; `/profile/**`, `/meal-plans/**`, `/shopping-lists/**` → auth required; `/auth` → guest only.
-  - `app/middleware/auth.global.ts` is the public-route allow-list (`/`, `/recipes/*`, `/categories/*`) since `routeRules` has no "public" mode.
+- **Single-tier Nitro server**: `server/api/<module>/<route>.{get,post,put,patch,delete}.ts` talks directly to Drizzle/Postgres. No BFF proxy layer. Better-Auth auto-mounts `/api/auth/*`.
+- **Better-Auth** is the `@nuxtjs/better-auth` module (the renamed `@onmax/nuxt-better-auth`). It requires the `auth` CLI package as a devDependency — without it `nuxt prepare` dies with "NuxtHub schema generation needs the Better Auth CLI package".
+  - `server/auth.config.ts` (`defineServerAuth`), `app/auth.config.ts` (`defineClientAuth` + `adminClient()`), both imported from `@nuxtjs/better-auth/config`.
+  - Auto-imports: `requireUserSession(event)`, `requireAdmin(event)`, `requireRole(event, role[])`, `refreshSessionCookieCache(event)` server-side; `useUserSession()` client-side.
+- **Sessions** live in the Postgres `session` table — no secondary storage (`hub.kv` and `auth.hubSecondaryStorage` are both off).
+- **Route protection** is declarative in `nuxt.config.ts → routeRules` (`/admin/**` → admin, `/profile/**` `/meal-plans/**` `/shopping-lists/**` → auth, `/auth/**` → guest). `app/middleware/auth.global.ts` currently only early-returns for public paths and guards nothing — adding a public route means changing `routeRules`, not that file.
+
+## API response contract
+
+- **Errors still return HTTP 200.** The envelope carries the real status in `status.code` (`ApiResponseCode` in `shared/types/response.ts`); only true crashes produce a 5xx. Assert on `status.code`, never on `response.status`.
+- `createResponse({ code }, data, meta?)` — success takes `(status, data, { total, limit, offset })`; error takes `(status, null?)`.
+- `requireAdmin` / `requireRole` write that envelope themselves and then throw, so handlers can `return` nothing after calling them.
+- Handlers import app tables from `hub:db:schema` and the client from `@nuxthub/db` (virtual modules) — not relative paths.
 
 ## Database
 
-- Schema lives in `server/db/schema.ts` — single source of truth.
-- **Import the Better-Auth tables** via `import { account, session, user } from "#auth/schema"` (virtual module provided by `@onmax/nuxt-better-auth`) so app tables can FK into `user.id`.
-- Denormalized counters on `user` (`followers_count`, `following_count`, `recipes_count`, `total_views`, `total_likes`) — updated transactionally in `follows/[id]` handlers. Use `GREATEST(count - 1, 0)` on unfollow to avoid negative drift.
-- Denormalized `author_name` / `author_avatar` / `author_bio` on `recipes` (set on POST so list reads don't need a JOIN).
-- `relations()` helpers in `schema.ts` — use them for future relational queries.
+- Schema lives in `server/db/schema.ts` — single source of truth. Import the Better-Auth tables via `import { account, session, user } from "#auth/schema"` so app tables can FK into `user.id`.
+- Denormalized counters on `user` (`followers_count`, `following_count`, `recipes_count`, `total_views`, `total_likes`) are updated transactionally in the `follows/[id]` handlers; use `GREATEST(count - 1, 0)` on unfollow to avoid negative drift.
+- Denormalized `author_name` / `author_avatar` / `author_bio` on `recipes` (set on POST so list reads skip a JOIN).
+- Migration `0002` runs `CREATE EXTENSION pg_trgm` and builds GIN trigram indexes — local Postgres needs the contrib extensions, and PGlite only exposes it when `pg_trgm` is passed to `PGlite.create({ extensions })`.
+- `relations()` helpers exist in `schema.ts` — use them for relational queries.
 
-## Server Utilities (auto-imported)
+## Conventions and gotchas
 
-- `requireAdmin(event)` / `requireRole(event, role | role[])` — wraps `requireUserSession` with role matchers.
-- `createResponse()` envelope: Success → `ApiResponse<T>`, error → `ApiResponse<never>` (assignable to `ApiResponse<T>`).
-- `clampLimit(raw, { default, max })` / `clampOffset(raw)` — `DEFAULT_LIMIT=60`, `MAX_LIMIT=200`.
-- `aggregateLikesForRecipes(ids)` → `Map<id, { count, userIds }>` in one IN query.
-- `formatRecipeResponse(row, likes?)` / `formatReviewResponse(row, extras?)` / `formatUserResponse(row)` — nullables → undefined, timestamps → ISO, denormalized fields preserved.
-- `sendVerificationEmail` / `sendPasswordResetEmail` via Resend. `escapeHtml()` for safety. Console.warn fallback when `NUXT_RESEND_API_KEY` is empty.
-
-## Conventions and Gotchas
-
-- **`noUncheckedIndexedAccess: true`** (in `.nuxt/tsconfig.json`): array index access returns `T | undefined`. After `const [row] = await db.update(...).returning()`, `row` is `T | undefined` — always guard before use.
-- **`requireRole(event, [Role.Admin, Role.Author])`** uses the `Role` enum from `shared/types`. Literal `["admin", "author"]` doesn't widen — TS complains. Don't use `useUser()` — it's gone; use `useUserSession()` from `@onmax/nuxt-better-auth`.
-- **`AuthUser.image`** is the avatar field, not `avatar`. For `<UAvatar :src>`, coalesce nulls: `:src="user.image ?? undefined"`.
-- **Vue templates don't parse `??` inside `:attr` template literals.** Use a `displayName` computed in `<script setup>` instead of `${user.firstName ?? ""} ${user.lastName ?? ""}` inline.
-- **`UForm` nesting** for array items: `<UForm :schema="itemSchema" :name="`items.${index}`" nested>`. Parent schema must not include nested fields; use a `validate` function for array-level constraints.
-- **`USelectMenu value-key="id"`** — Drizzle serializes IDs as `text`, not `_id`.
-- **`UPagination v-model:page`** — Nuxt UI v4 (not `v-model`).
-- **Use Nuxt UI semantic colors** (`text-default`, `bg-elevated`, `border-muted`), never raw Tailwind palette colors.
-- **Zod v4** (`zod@^4.3.6`): API differs from v3 (`z.string("message")` for invalid_type, new refinement syntax). Check existing handlers before writing new schemas.
-- **Adding an `/admin/*` route** requires updating the `navItems` array in `app/layouts/admin.vue`.
+- **`noUncheckedIndexedAccess: true`** (via `.nuxt/tsconfig.json`): index access yields `T | undefined`. After `const [row] = await db.update(...).returning()`, guard `row` before use.
+- **`requireRole(event, [Role.Admin, Role.Author])`** needs the `Role` enum from `shared/types` (`shared/types/user.ts`); string literals don't widen. Use `useUserSession()`, not the removed `useUser()`, on the client.
+- **Two different avatar fields**: Better-Auth's session user exposes `image` (`user.image ?? undefined` for `<UAvatar :src>`), while API `UserResponse` exposes `avatar`.
+- **Vue templates don't parse `??` inside `:attr` template literals.** Compute a `displayName` in `<script setup>` instead of `${user.firstName ?? ""} ${user.lastName ?? ""}` inline.
+- **`$fetch` calls are explicitly typed** — `await $fetch<ApiResponse<T>>(url, …)`. Leaving them untyped lets Nitro's route-type inference blow up with `TS2321 Excessive stack depth` on TS 6.
+- **`UForm` nesting** for array items: `<UForm :schema="itemSchema" :name="`items.${index}`" nested>`. The parent schema must exclude nested fields; enforce array-level constraints in a `validate` function.
+- **`USelectMenu value-key="id"`** — Drizzle serializes ids as `text`.
+- **`UPagination v-model:page`** — Nuxt UI v4, not `v-model`.
+- **Semantic colors only** (`text-default`, `bg-elevated`, `border-muted`) — no raw Tailwind palette classes.
+- **Zod v4** (`zod@^4`): `z.string("message")` for the invalid_type message, new refinement syntax. Check nearby handlers before writing schemas.
+- **Adding an `/admin/*` route** also needs an entry in `navItems` in `app/layouts/admin.vue`.
+- **TypeScript is pinned to exactly `6.0.3`** — do not let `bun update --latest` move it.
+- The dev server binds **`[::1]:3000`**; probe `http://localhost:3000`, since `127.0.0.1` refuses connections.
 
 ## Testing
 
-- **3 Vitest projects** (`vitest.config.ts`): `unit` (`test/unit/`, node env), `e2e` (`test/e2e/`, currently empty), `nuxt` (`test/nuxt/`, full Nuxt runtime via `@nuxt/test-utils/e2e`).
-- **`.env.test`** is committed with placeholder secrets (Better-Auth + NuxtHub read it on Nuxt boot).
-- **`bun:test` stub** (`test/stubs/bun-test.ts` aliased via `vitest.config.ts → resolve.alias`) — Vite tries to bundle `bun:test` when `process.versions.bun` is set; the stub makes it resolvable under Node. Don't delete.
-- **`bun test:nuxt`** must serialize: each test file calls `await setup({...})` which spins up its own Nitro server on port 3000. The npm script does NOT pass `--no-file-parallelism` and `vitest.config.ts` does not disable file parallelism, so pass it explicitly (`bun test:nuxt -- --no-file-parallelism`) or expect port collisions when multiple files run in parallel.
-- Test workflow: `bun test:unit` before pushing (fast), `bun test:nuxt` before opening a PR (slow).
+- **3 Vitest projects** (`vitest.config.ts`): `unit` (`test/unit/`, node env), `e2e` (`test/e2e/`, empty), `nuxt` (`test/nuxt/`, real Nuxt runtime).
+- `test/nuxt/**` files call `await setup({ rootDir: process.cwd(), dev: true })`, which starts a real Nitro server against **`DATABASE_URL`** — those tests need a live Postgres with migrations applied (and seeded data for data-dependent assertions). They are integration tests, not mocks.
+- There is **no committed `.env.test`** (old docs claimed one): copy `.env.example` → `.env`, then `bun db:migrate` and seed before running the `nuxt` project.
+- **`bun:test` stub** (`test/stubs/bun-test.ts`, aliased in `vitest.config.ts`) keeps Vite from trying to bundle Bun's runtime module under Node — don't delete it.
+- Workflow: `bun test:unit` before pushing, `bun test:nuxt` before a PR. After a dependency bump, delete `node_modules/.cache` and `.nuxt` or the Vite dep optimizer serves stale chunks (dev server crashes on a missing `deps/config-*.js`).
 
 ## Git
 
-- `main` — default branch (`origin/HEAD`)
-- `develop` — development branch (current work lives here)
-
-## .gitignore excludes
-
-`.github/`, `.claude/`, `CLAUDE.md`, `docs/PORT_PLAN.md` (do not commit — it's the historical port plan).
-
-## `../chongkran-backend`
-
-Kept frozen as historical reference. **Do not add new code there.** All endpoints it used to serve are now Nitro handlers in `server/api/`. Per-module `*.controller.ts` / `*.service.ts` files there are the source of truth for original request/response shapes.
-
-## OpenCode
-
-`opencode.json` enables remote MCP servers for Nuxt (`https://nuxt.com/mcp`) and Nuxt UI (`https://ui.nuxt.com/mcp`).
+- `main` — default branch; `develop` — development branch.
+- `.gitignore` excludes `.github/`, `.claude/`, and `CLAUDE.md` — agent config in those paths is not committed.

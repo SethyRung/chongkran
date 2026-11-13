@@ -19,19 +19,18 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 
 ## Tech Stack
 
-| Layer           | Technology                                                         |
-| --------------- | ------------------------------------------------------------------ |
-| Framework       | Nuxt 4 (Vue 3, hybrid rendering, auto-imports)                     |
-| Server          | Nitro (replaces the NestJS backend)                                |
-| Styling         | Tailwind CSS v4, Nuxt UI v4                                        |
-| State           | Pinia                                                              |
-| Database        | Postgres 18 via NuxtHub                                            |
-| ORM             | Drizzle ORM (schema-first; migrations via `bunx nuxt db generate`) |
-| Auth            | Better-Auth with email verification + admin plugin                 |
-| Session storage | Postgres `session` table (Better-Auth)                             |
-| File uploads    | Vercel Blob                                                        |
-| Email           | Resend (verification + password reset)                             |
-| Deployment      | Vercel                                                             |
+| Layer           | Technology                                                   |
+| --------------- | ------------------------------------------------------------ |
+| Framework       | Nuxt 4 (Vue 3, hybrid rendering, auto-imports)               |
+| Server          | Nitro (replaces the NestJS backend)                          |
+| Styling         | Tailwind CSS v4, Nuxt UI v4                                  |
+| Database        | Postgres 18 via NuxtHub                                      |
+| ORM             | Drizzle ORM (schema-first; migrations via `bun db:generate`) |
+| Auth            | Better-Auth with email verification + admin plugin           |
+| Session storage | Postgres `session` table (Better-Auth)                       |
+| File uploads    | Vercel Blob                                                  |
+| Email           | Resend (verification + password reset)                       |
+| Deployment      | Vercel                                                       |
 
 ## Installation
 
@@ -67,7 +66,7 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 4. Start the local services:
 
    ```sh
-   bun docker-compose up -d
+   bun run docker-compose up -d
    ```
 
    This brings up Postgres 18 (port 5432) using the credentials from `.env`.
@@ -75,7 +74,7 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 5. Apply database migrations:
 
    ```sh
-   bunx nuxt db migrate
+   bun db:migrate
    ```
 
    For the dev workflow where NuxtHub auto-generates migrations on first boot:
@@ -87,8 +86,10 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 6. (Optional) Seed the database:
 
    ```sh
-   bun hub:task db:seed
+   curl -X POST http://localhost:3000/_nitro/tasks/db:seed
    ```
+
+   (Requires the dev server from the next step to be running.)
 
    Creates `admin@chongkran.com` (password `Password123!`) and a demo user so the admin pages have someone to sign in as.
 
@@ -110,7 +111,7 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 | `bun build`     | Production build                  |
 | `bun generate`  | Static site generation            |
 | `bun preview`   | Preview production build          |
-| `bun predeploy` | `bun hub:db:migrate && bun build` |
+| `bun predeploy` | `bun db:migrate && bun run build` |
 | `bun typecheck` | `nuxt typecheck`                  |
 
 ### Quality
@@ -132,18 +133,18 @@ A recipe web application for browsing, creating, and sharing recipes. Built as a
 
 ### Database
 
-| Command                 | Description                                             |
-| ----------------------- | ------------------------------------------------------- |
-| `bunx nuxt db generate` | Regenerate Drizzle migration from `server/db/schema.ts` |
-| `bunx nuxt db migrate`  | Apply pending migrations                                |
-| `bun hub:task db:seed`  | Run the seed task                                       |
+| Command                               | Description                                             |
+| ------------------------------------- | ------------------------------------------------------- |
+| `bun db:generate`                     | Regenerate Drizzle migration from `server/db/schema.ts` |
+| `bun db:migrate`                      | Apply pending migrations                                |
+| `curl -X POST …/_nitro/tasks/db:seed` | Run the seed task (dev server must be up)               |
 
 ### Local services
 
-| Command                    | Description                           |
-| -------------------------- | ------------------------------------- |
-| `bun docker-compose up -d` | Start Postgres                        |
-| `bun docker-compose down`  | Stop them (add `-v` to clear volumes) |
+| Command                        | Description                           |
+| ------------------------------ | ------------------------------------- |
+| `bun run docker-compose up -d` | Start Postgres                        |
+| `bun run docker-compose down`  | Stop them (add `-v` to clear volumes) |
 
 ## Project Structure
 
@@ -186,7 +187,7 @@ chongkran/
   nuxt.config.ts              Nuxt configuration
   docker-compose.yml          Postgres only
   vitest.config.ts            3 projects: unit / e2e / nuxt
-  .env.test                   Test-only env defaults (committed)
+  .env                        Local env (cp .env.example .env; nothing is committed)
 ```
 
 ## Authentication and Authorization
@@ -211,13 +212,13 @@ chongkran/
 
 - **Drizzle ORM** with **Postgres 18** via NuxtHub's `hub.db` block.
 - **Schema** in `server/db/schema.ts` is the single source of truth.
-- **Migrations** auto-generated by `bunx nuxt db generate` and written to `server/db/migrations/postgresql/`. Do not hand-roll.
+- **Migrations** auto-generated by `bun db:generate` and written to `server/db/migrations/postgresql/`. Do not hand-roll.
 - **Tables**:
   - Better-Auth: `user`, `session`, `account`, `verification`
   - App: `categories`, `recipes`, `recipe_likes`, `reviews`, `favorites`, `follows`, `meal_plans`, `shopping_lists`
 - **Denormalized counters** on `user`: `followers_count`, `following_count`, `recipes_count`, `total_views`, `total_likes`. Updated transactionally in `follows/` handlers (`GREATEST(count - 1, 0)` on unfollow to avoid negative drift).
 - **Denormalized fields** on `recipes`: `author_name`, `author_avatar`, `author_bio` (set on POST so list reads don't need a JOIN).
-- **`#auth/schema`** virtual import (provided by `@onmax/nuxt-better-auth`) re-exports the Better-Auth tables so `server/db/schema.ts` can FK into `user.id`.
+- **`#auth/schema`** virtual import (provided by `@nuxtjs/better-auth`) re-exports the Better-Auth tables so `server/db/schema.ts` can FK into `user.id`.
 
 ## File Uploads
 
