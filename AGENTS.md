@@ -15,7 +15,7 @@ Full-stack recipe web app. Single Nuxt 4 deploy — Nitro server routes + Vue cl
 | `bun typecheck`                | `nuxt typecheck` — run before opening a PR                                                                              |
 | `bun test`                     | All Vitest projects                                                                                                     |
 | `bun test:unit`                | Pure-function tests (`test/unit/`), sub-second                                                                          |
-| `bun test:nuxt`                | Server-handler tests (`test/nuxt/`), each file boots its own Nitro server (~5 min)                                      |
+| `bun test:nuxt`                | Server-handler tests (`test/nuxt/`), each file boots its own Nitro server (~4 min serial)                               |
 | `bun db:generate`              | Regenerate the Drizzle migration from `server/db/schema.ts` (**never hand-roll migrations**)                            |
 | `bun db:migrate`               | Apply pending migrations                                                                                                |
 | `bunx nitro task run db:seed`  | Won't work — run `curl -X POST http://localhost:3000/_nitro/tasks/db:seed` while `bun dev` is up                        |
@@ -69,6 +69,7 @@ Seeding creates `admin@chongkran.com` / `Password123!` plus a demo author, categ
 
 - **3 Vitest projects** (`vitest.config.ts`): `unit` (`test/unit/`, node env), `e2e` (`test/e2e/`, empty), `nuxt` (`test/nuxt/`, real Nuxt runtime).
 - `test/nuxt/**` files call `await setup({ rootDir: process.cwd(), dev: true })`, which starts a real Nitro server against **`DATABASE_URL`** — those tests need a live Postgres with migrations applied (and seeded data for data-dependent assertions). They are integration tests, not mocks.
+- `test:nuxt` passes `--no-file-parallelism` on purpose: each file boots a full dev server (~60 s), and 10 of them in parallel time out in `waitForServer` on an 8-core box. Don't drop the flag to "speed it up".
 - There is **no committed `.env.test`** (old docs claimed one): copy `.env.example` → `.env`, then `bun db:migrate` and seed before running the `nuxt` project.
 - **`bun:test` stub** (`test/stubs/bun-test.ts`, aliased in `vitest.config.ts`) keeps Vite from trying to bundle Bun's runtime module under Node — don't delete it.
 - Workflow: `bun test:unit` before pushing, `bun test:nuxt` before a PR. After a dependency bump, delete `node_modules/.cache` and `.nuxt` or the Vite dep optimizer serves stale chunks (dev server crashes on a missing `deps/config-*.js`).

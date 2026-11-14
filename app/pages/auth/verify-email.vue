@@ -62,8 +62,8 @@ async function resend() {
     <p class="mt-3 text-base text-muted leading-relaxed">
       <template v-if="email">
         We sent a verification link to
-        <span class="font-medium text-default break-all">{{ email }}</span
-        >. Open it to finish setting up your account.
+        <span class="font-medium text-default break-all">{{ email }}</span>. Open it to finish
+        setting up your account.
       </template>
       <template v-else>
         We sent you a verification link when you signed up. Open it to finish setting up your

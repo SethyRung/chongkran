@@ -124,12 +124,12 @@ async function onSubmit(_event: FormSubmitEvent<Schema>) {
     let res: ApiResponse<unknown>;
 
     if (isEditing.value) {
-      res = await $fetch(`/api/meal-plans/${props.mealPlan!.id}`, {
+      res = await $fetch<ApiResponse<unknown>>(`/api/meal-plans/${props.mealPlan!.id}`, {
         method: "PATCH",
         body,
       });
     } else {
-      res = await $fetch("/api/meal-plans", {
+      res = await $fetch<ApiResponse<unknown>>("/api/meal-plans", {
         method: "POST",
         body,
       });

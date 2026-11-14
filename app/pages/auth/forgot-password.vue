@@ -108,8 +108,8 @@ function tryAnother() {
       <h2 class="text-2xl font-semibold tracking-tight text-highlighted">Check your inbox</h2>
       <p class="mt-3 text-base text-muted leading-relaxed">
         We sent a reset link to
-        <span class="font-medium text-default break-all">{{ state.email }}</span
-        >. The link expires in 1 hour.
+        <span class="font-medium text-default break-all">{{ state.email }}</span>. The link expires
+        in 1 hour.
       </p>
       <UButton
         label="Try another email"
