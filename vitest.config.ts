@@ -1,5 +1,4 @@
 import { defineConfig } from "vitest/config";
-import { defineVitestProject } from "@nuxt/test-utils/config";
 
 export default defineConfig({
   test: {
@@ -18,19 +17,20 @@ export default defineConfig({
           environment: "node",
         },
       },
-      await defineVitestProject({
+      {
         test: {
           name: "nuxt",
           include: ["test/nuxt/**/*.{test,spec}.ts"],
-          environment: "nuxt",
+          environment: "node",
         },
         resolve: {
           alias: {
+            "#shared": new URL("./shared", import.meta.url).pathname,
             "bun:test": new URL("./test/stubs/bun-test.ts", import.meta.url).pathname,
             "bun:test/mock": new URL("./test/stubs/bun-test.ts", import.meta.url).pathname,
           },
         },
-      }),
+      },
     ],
   },
 });
