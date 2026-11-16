@@ -1,79 +1,74 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
-@font-face {
-  font-family: "Geist Pixel Grid";
-  src: url("/fonts/GeistPixel/GeistPixel-Grid.ttf") format("truetype");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Pixel Line";
-  src: url("/fonts/GeistPixel/GeistPixel-Line.ttf") format("truetype");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Pixel Circle";
-  src: url("/fonts/GeistPixel/GeistPixel-Circle.ttf") format("truetype");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Pixel Square";
-  src: url("/fonts/GeistPixel/GeistPixel-Square.ttf") format("truetype");
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "Geist Pixel Triangle";
-  src: url("/fonts/GeistPixel/GeistPixel-Triangle.ttf") format("truetype");
-  font-display: swap;
-}
-
 @theme static {
-  --color-primary-50: #f7fce9;
-  --color-primary-100: #edf8cf;
-  --color-primary-200: #dbf1a5;
-  --color-primary-300: #c1e670;
-  --color-primary-400: #a7d645;
-  --color-primary-500: #90c628;
-  --color-primary-600: #69961a;
-  --color-primary-700: #507219;
-  --color-primary-800: #425b19;
-  --color-primary-900: #384d1a;
-  --color-primary-950: #1c2a09;
+  --color-primary-50: oklch(0.977 0.011 35.305);
+  --color-primary-100: oklch(0.945 0.028 35.305);
+  --color-primary-200: oklch(0.891 0.055 35.305);
+  --color-primary-300: oklch(0.813 0.091 35.305);
+  --color-primary-400: oklch(0.709 0.125 35.305);
+  --color-primary-500: oklch(0.623 0.138 35.305);
+  --color-primary-600: oklch(0.522 0.136 35.305);
+  --color-primary-700: oklch(0.439 0.119 35.305);
+  --color-primary-800: oklch(0.37 0.098 35.305);
+  --color-primary-900: oklch(0.318 0.078 35.305);
+  --color-primary-950: oklch(0.202 0.055 35.305);
 
-  --font-sans: "Geist", sans-serif;
-  --font-mono: "Geist Mono", sans-serif;
-  --font-pixel-circle: "Geist Pixel Circle", sans-serif;
-  --font-pixel-grid: "Geist Pixel Grid", sans-serif;
-  --font-pixel-line: "Geist Pixel Line", sans-serif;
-  --font-pixel-square: "Geist Pixel Square", sans-serif;
-  --font-pixel-triangle: "Geist Pixel Triangle", sans-serif;
+  --color-neutral-50: oklch(0.977 0.001 44.59);
+  --color-neutral-100: oklch(0.942 0.003 44.59);
+  --color-neutral-200: oklch(0.882 0.006 44.59);
+  --color-neutral-300: oklch(0.796 0.011 44.59);
+  --color-neutral-400: oklch(0.68 0.015 44.59);
+  --color-neutral-500: oklch(0.586 0.016 44.59);
+  --color-neutral-600: oklch(0.473 0.016 44.59);
+  --color-neutral-700: oklch(0.363 0.014 44.59);
+  --color-neutral-800: oklch(0.271 0.011 44.59);
+  --color-neutral-900: oklch(0.22 0.009 44.59);
+  --color-neutral-950: oklch(0.103 0.006 44.59);
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @utility no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-
-  /* Hide scrollbar for Chrome, Safari and Opera */
+  scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
   }
 }
 
-::-webkit-scrollbar {
-  width: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--ui-bg-muted);
-  border-radius: 5px;
-}
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--ui-bg-muted) transparent;
+  scrollbar-color: var(--ui-border) transparent;
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-from,
+  .page-leave-to {
+    transform: none;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

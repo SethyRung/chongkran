@@ -8,6 +8,10 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   css: ["~/assets/css/main.css"],
 
+  app: {
+    pageTransition: { name: "page", mode: "out-in" },
+  },
+
   modules: [
     "@nuxt/ui",
     "@nuxthub/core",
@@ -65,13 +69,5 @@ export default defineNuxtConfig({
     experimental: {
       tasks: true,
     },
-  },
-
-  fonts: {
-    families: [
-      { name: "Geist", provider: "local" },
-      { name: "Geist Mono", provider: "local" },
-      { name: "Geist Pixel", provider: "local" },
-    ],
   },
 });

@@ -1,7 +1,7 @@
 # Chongkran Design System
 
-Design specification for the full-site redesign. Implementation awaits confirmation
-of the [redesign brief](docs/redesign-brief.md).
+Design specification for the full-site redesign, authorized for implementation.
+See the [redesign brief](docs/redesign-brief.md) for scope and acceptance criteria.
 
 ## Product and direction
 
@@ -10,7 +10,7 @@ and organize shopping. Recipe discovery is the primary journey.
 
 The experience should feel like a polished SaaS product: clear hierarchy, generous
 spacing, consistent controls, readable typography, and restrained motion. Warm
-surfaces and genuine food photography establish its food identity.
+accents and genuine food photography establish its food identity.
 
 Retain the Chongkran name. Establish a new wordmark, palette, and typography.
 
@@ -19,36 +19,36 @@ Retain the Chongkran name. Establish a new wordmark, palette, and typography.
 ### Nuxt UI theme
 
 Use Nuxt UI components, semantic color roles, and utility classes throughout.
-Define the brand palette and appearance tokens centrally in
-`app/assets/css/main.css`; configure semantic palette assignments and shared
-component defaults in `app/app.config.ts`.
+Define the custom `primary` palette in `app/assets/css/main.css` and assign
+`primary: "primary"` and `neutral: "neutral"` in `app/app.config.ts`. Use Nuxt UI's
+standard neutral palette, semantic tokens, and light/dark shade selection.
 
-Generate complete custom color ramps from 50 through 950 for terracotta and warm
-neutrals using [tailwind_tools](https://github.com/SethyRung/tailwind_tools).
-Use its Tailwind v4 output with explicit palette names:
+Generate the complete custom primary ramp from 50 through 950 with
+[tailwind_tools](https://github.com/SethyRung/tailwind_tools):
 
 ```sh
-bunx @sethyrung/tailwind_tools palette '#A9462D' --name terracotta --step 600
-bunx @sethyrung/tailwind_tools palette '#2C2522' --name warm-neutral --step 800
+bunx @sethyrung/tailwind_tools@0.2.0 palette '#A9462D' --name primary --step 600
 ```
 
-Place the generated theme declarations in the central stylesheet and map the
-palettes to Nuxt UI's primary and neutral roles. Record the generator version
-alongside the palette provenance when implementing.
+The stylesheet contains the generator's OKLCH output. The seed is a palette
+anchor; Nuxt UI chooses the active primary shade in each appearance mode.
 
-The following anchors describe the intended appearance; use the generated ramps
-to choose final shade assignments and validate token combinations for contrast.
+| Role             | Light appearance          | Dark appearance           | Usage                                 |
+| ---------------- | ------------------------- | ------------------------- | ------------------------------------- |
+| Primary          | Custom primary shade 500  | Custom primary shade 400  | Main actions, links, selected accents |
+| Page surface     | Nuxt UI default white     | Nuxt UI neutral shade 900 | Page background                       |
+| Elevated surface | Nuxt UI neutral shade 100 | Nuxt UI neutral shade 800 | Menus, overlays, grouped surfaces     |
+| Main text        | Nuxt UI neutral shade 700 | Nuxt UI neutral shade 200 | Body copy                             |
+| Surface boundary | Nuxt UI neutral shade 200 | Nuxt UI neutral shade 800 | Dividers and surface boundaries       |
 
-| Role             | Light appearance           | Dark appearance            | Usage                                 |
-| ---------------- | -------------------------- | -------------------------- | ------------------------------------- |
-| Primary          | Deep terracotta, `#A9462D` | Soft terracotta, `#ECA58C` | Main actions, links, selected accents |
-| Page surface     | Warm ivory, `#FAF8F5`      | Warm charcoal, `#1B1816`   | Page background                       |
-| Elevated surface | Soft white, `#FFFDFC`      | Raised charcoal, `#25211F` | Cards, menus, overlays                |
-| Main text        | Charcoal, `#2C2522`        | Warm ivory, `#F5EEE8`      | Headings and body copy                |
-| Subtle border    | Warm neutral, `#E5DDD6`    | Deep neutral, `#453C36`    | Dividers and surface boundaries       |
+Do not redefine Nuxt UI's semantic `--ui-*` colors, surface tokens, or default
+component themes. Keep `app.config.ts` limited to palette assignments. Use a
+scoped `UTheme` for a group of related components, or direct `class`, `ui`, and
+component props for individual changes. Do not wrap the entire app in a theme
+that recreates global component overrides.
 
-Hex values belong in central theme definitions. Components consume semantic roles
-and utilities rather than raw palette classes or inline color values.
+Components consume semantic roles and utilities rather than raw palette classes
+or inline color values.
 
 | Purpose                    | Semantic expression                                            |
 | -------------------------- | -------------------------------------------------------------- |
@@ -88,11 +88,13 @@ remain easy to find. Theme overrides must work consistently in both modes.
   32px desktop gutters.
 - Give landing sections approximately 64px vertical spacing on mobile and
   96–128px on desktop. Application screens use tighter spacing.
-- Use 8px control rounding, 12–16px cards, and 16–24px larger preview frames.
+- Keep Nuxt UI's standard control and card rounding. Apply larger rounded shapes
+  directly to landing preview frames where needed.
 - Reserve pill shapes for tags, badges, and compact category controls.
 - Use subtle borders for structure and small shadows for elevation. Overlays
   should be visually distinct from the page.
-- Prefer shared Nuxt UI defaults over repeated per-instance overrides.
+- Preserve Nuxt UI defaults. Scope necessary customizations with `UTheme` or
+  apply them directly to the relevant component.
 
 ### Photography and icons
 
@@ -161,6 +163,10 @@ elements restrained. On mobile, preserve clear CTAs and legible previews.
 | Settings                | Logically grouped fields and clear save feedback.                                                                                                                                    |
 | Admin                   | Consistent dashboard cards, readable tables, filters, status indicators, pagination, and accessible row actions. Small screens retain access to every action.                        |
 
+Dashboard charts use Nuxt UI's `UChart` with semantic series colors, accessible
+names, keyboard tooltips, and responsive SVG rendering. Show loading and empty
+states. Daily trends align values by date and fill missing days with zero.
+
 ## Interaction and content states
 
 - Fix incomplete UI interactions, including search controls and recipe-creation
@@ -173,6 +179,22 @@ elements restrained. On mobile, preserve clear CTAs and legible previews.
   after validation failures.
 - Provide clear success feedback for completed actions.
 - Confirm destructive actions in context and distinguish them semantically.
+
+### Recipe and planning workflows
+
+- Public recipe reads show approved content. Owners and administrators can read
+  unpublished recipes; author edits return recipes to pending review.
+- My Recipes provides prefilled editing with optional image replacement and a
+  confirmation before deletion.
+- Rejected author applicants can apply again, with a clear pending state after
+  successful resubmission.
+- Count each signed-in cook's first visit to an approved recipe once. Display
+  profile and author totals from current recipe statistics.
+- Meal plans offer an ingredient preview before adding to the shopping list.
+  Repeated meals multiply ingredients. Compatible amounts combine; ambiguous
+  quantities stay separate. Existing checked purchases are preserved.
+- Shopping lists remain usable when the final item is removed or all checked
+  items are cleared.
 
 ## Motion
 
@@ -193,6 +215,18 @@ Preserve native scrolling.
 Run GSAP after the component mounts, scope selectors to the component, and revert
 animations on unmount. Prefer transform and opacity animation. Keep loading,
 focus, and navigation behavior usable throughout transitions.
+
+Sequence the homepage hero in one timeline. Reveal feature and step groups once
+with ScrollTrigger and short staggers; on mobile, trigger each stacked item
+independently. Preview tabs use a short exit and entrance. Use matchMedia for
+breakpoints and live reduced-motion changes. Refresh trigger positions when
+preview content changes height. Revert every animation and trigger on unmount.
+Keyboard focus must immediately reveal any transparent entrance content.
+
+Manage page motion in a client plugin through Nuxt's app/page lifecycle hooks.
+Initialize marked page roots after mount or page resolution, resync after page
+transitions, and clean up before the next page starts. Keep preview-tab motion
+scoped to its component.
 
 ## Responsive behavior and accessibility
 
