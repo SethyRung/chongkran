@@ -1,32 +1,16 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
+@import "./palette.css";
 
 @theme static {
-  --color-primary-50: oklch(0.977 0.011 35.305);
-  --color-primary-100: oklch(0.945 0.028 35.305);
-  --color-primary-200: oklch(0.891 0.055 35.305);
-  --color-primary-300: oklch(0.813 0.091 35.305);
-  --color-primary-400: oklch(0.709 0.125 35.305);
-  --color-primary-500: oklch(0.623 0.138 35.305);
-  --color-primary-600: oklch(0.522 0.136 35.305);
-  --color-primary-700: oklch(0.439 0.119 35.305);
-  --color-primary-800: oklch(0.37 0.098 35.305);
-  --color-primary-900: oklch(0.318 0.078 35.305);
-  --color-primary-950: oklch(0.202 0.055 35.305);
+  --font-sans: Geist, ui-sans-serif, system-ui, sans-serif;
+  --font-display: Anton, "Arial Narrow", sans-serif;
+}
 
-  --color-neutral-50: oklch(0.977 0.001 44.59);
-  --color-neutral-100: oklch(0.942 0.003 44.59);
-  --color-neutral-200: oklch(0.882 0.006 44.59);
-  --color-neutral-300: oklch(0.796 0.011 44.59);
-  --color-neutral-400: oklch(0.68 0.015 44.59);
-  --color-neutral-500: oklch(0.586 0.016 44.59);
-  --color-neutral-600: oklch(0.473 0.016 44.59);
-  --color-neutral-700: oklch(0.363 0.014 44.59);
-  --color-neutral-800: oklch(0.271 0.011 44.59);
-  --color-neutral-900: oklch(0.22 0.009 44.59);
-  --color-neutral-950: oklch(0.103 0.006 44.59);
-
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+:root {
+  --ui-radius: 0.375rem;
+  --ui-header-height: 4rem;
+  --ui-container: 90rem;
 }
 
 @utility no-scrollbar {
@@ -41,28 +25,7 @@
   scrollbar-color: var(--ui-border) transparent;
 }
 
-.page-enter-active,
-.page-leave-active {
-  transition:
-    opacity 160ms ease,
-    transform 160ms ease;
-}
-
-.page-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-
-.page-leave-to {
-  opacity: 0;
-  transform: translateY(-3px);
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .page-enter-from,
-  .page-leave-to {
-    transform: none;
-  }
   *,
   *::before,
   *::after {
