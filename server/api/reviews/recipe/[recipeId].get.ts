@@ -4,7 +4,8 @@ import { formatReviewResponse } from "~~/server/utils/review";
 import type { ReviewResponse } from "#shared/types";
 
 export default defineEventHandler(async (event): Promise<ApiResponse<ReviewResponse[]>> => {
-  await requireSession(event);
+  const query = getQuery(event);
+  if (query.public !== "true") await requireSession(event);
 
   const recipeId = getRouterParam(event, "recipeId");
   if (!recipeId) {
@@ -14,17 +15,23 @@ export default defineEventHandler(async (event): Promise<ApiResponse<ReviewRespo
     });
   }
 
-  const query = getQuery(event);
   const limit = clampLimit(query.limit, { default: 10 });
   const offset = clampOffset(query.offset);
 
   const [recipe] = await db
-    .select({ id: recipes.id })
+    .select({ id: recipes.id, status: recipes.status, author: recipes.author })
     .from(recipes)
     .where(eq(recipes.id, recipeId))
     .limit(1);
   if (!recipe) {
     return createResponse({ code: ApiResponseCode.NotFound, message: "Recipe not found" });
+  }
+
+  if (recipe.status !== "approved") {
+    const { user } = await requireSession(event);
+    if (user.id !== recipe.author && user.role !== "admin") {
+      return createResponse({ code: ApiResponseCode.NotFound, message: "Recipe not found" });
+    }
   }
 
   const [rows, totalRow] = await Promise.all([

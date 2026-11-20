@@ -21,7 +21,7 @@ export default defineEventHandler(async (event): Promise<ApiResponse<null>> => {
     return createResponse({ code: ApiResponseCode.NotFound, message: "Review not found" });
   }
 
-  if (existing.userId !== sessionUser.id) {
+  if (existing.userId !== sessionUser.id && sessionUser.role !== "admin") {
     return createResponse({ code: ApiResponseCode.Forbidden, message: "Not authorized" });
   }
 

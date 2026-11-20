@@ -3,12 +3,6 @@ import { z } from "zod";
 import { shoppingLists } from "hub:db:schema";
 import type { ShoppingListResponse } from "#shared/types";
 
-const shoppingItemSchema = z.object({
-  name: z.string().min(1),
-  quantity: z.string().min(1),
-  checked: z.boolean().default(false),
-});
-
 const createShoppingListSchema = z.object({
   items: z.array(shoppingItemSchema).default([]),
 });

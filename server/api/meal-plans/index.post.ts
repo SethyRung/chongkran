@@ -6,6 +6,7 @@ const recipeEntrySchema = z.object({
   recipeId: z.string().min(1),
   day: z.string().min(1),
   mealType: z.string().min(1),
+  quantity: z.number().int().min(1).max(10).optional(),
 });
 
 const createMealPlanSchema = z.object({

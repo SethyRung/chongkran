@@ -14,7 +14,12 @@ export default defineEventHandler(async (event): Promise<ApiResponse<RecipeRespo
 
   const [row] = await db.select().from(recipes).where(eq(recipes.id, id)).limit(1);
 
-  if (!row) {
+  const viewer =
+    row?.status !== "approved" && row ? (await getUserSession(event))?.user : undefined;
+  if (
+    !row ||
+    (row.status !== "approved" && viewer?.id !== row.author && viewer?.role !== "admin")
+  ) {
     return createResponse({ code: ApiResponseCode.NotFound, message: "Recipe not found" });
   }
 

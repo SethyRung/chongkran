@@ -14,7 +14,7 @@ export default defineEventHandler(async (event): Promise<ApiResponse<{ message: 
     return createResponse({ code: ApiResponseCode.NotFound, message: "User not found" });
   }
 
-  if (existing.authorRequestStatus) {
+  if (existing.authorRequestStatus === "pending" || existing.authorRequestStatus === "approved") {
     return createResponse({ code: ApiResponseCode.Success }, { message: "Waiting for approval" });
   }
 

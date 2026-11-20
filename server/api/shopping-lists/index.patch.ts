@@ -1,16 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { shoppingLists } from "hub:db:schema";
 import type { ShoppingListResponse } from "#shared/types";
 
-const shoppingItemSchema = z.object({
-  name: z.string().min(1),
-  quantity: z.string().min(1),
-  checked: z.boolean().default(false),
-});
-
 const updateShoppingListSchema = z.object({
-  items: z.array(shoppingItemSchema).min(1),
+  items: z.array(shoppingItemSchema),
+  previousItems: z.array(shoppingItemSchema).optional(),
 });
 
 export default defineEventHandler(async (event): Promise<ApiResponse<ShoppingListResponse>> => {
@@ -21,11 +16,23 @@ export default defineEventHandler(async (event): Promise<ApiResponse<ShoppingLis
   const [row] = await db
     .update(shoppingLists)
     .set({ items: body.items })
-    .where(eq(shoppingLists.userId, sessionUser.id))
+    .where(
+      and(
+        eq(shoppingLists.userId, sessionUser.id),
+        body.previousItems
+          ? sql`${shoppingLists.items} = ${JSON.stringify(body.previousItems)}::jsonb`
+          : undefined,
+      ),
+    )
     .returning();
 
   if (!row) {
-    return createResponse({ code: ApiResponseCode.NotFound, message: "List not found" });
+    return createResponse({
+      code: ApiResponseCode.NotFound,
+      message: body.previousItems
+        ? "The list changed. Reloaded the latest items."
+        : "List not found",
+    });
   }
 
   return createResponse(

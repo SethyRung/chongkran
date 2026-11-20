@@ -2,6 +2,7 @@ export type RecipeEntry = {
   recipeId: string;
   day: string;
   mealType: string;
+  quantity?: number;
 };
 
 export type MealPlanUser = {

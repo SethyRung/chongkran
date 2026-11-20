@@ -2,6 +2,8 @@ export type ShoppingItem = {
   name: string;
   quantity: string;
   checked: boolean;
+  allocations?: { planId: string; amount: number }[];
+  source?: { planId: string; recipes: { id: string; title: string }[] };
 };
 
 export type ShoppingListUser = {

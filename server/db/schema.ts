@@ -1,3 +1,4 @@
+import type { RecipeEntry, ShoppingItem } from "#shared/types";
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
@@ -165,9 +166,7 @@ export const mealPlans = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
-    recipes: jsonb("recipes")
-      .$type<{ recipeId: string; day: string; mealType: string }[]>()
-      .notNull(),
+    recipes: jsonb("recipes").$type<RecipeEntry[]>().notNull(),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at")
       .notNull()
@@ -183,7 +182,7 @@ export const shoppingLists = pgTable("shopping_lists", {
     .notNull()
     .unique()
     .references(() => user.id, { onDelete: "cascade" }),
-  items: jsonb("items").$type<{ name: string; quantity: string; checked: boolean }[]>().notNull(),
+  items: jsonb("items").$type<ShoppingItem[]>().notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
