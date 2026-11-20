@@ -17,6 +17,10 @@ Put Nitro handlers in `server/api/`, server-only helpers in `server/utils/`, and
 
 Follow Oxfmt's two-space indentation, double quotes, semicolons, and trailing commas. Use PascalCase for Vue components, `use*` for composables, and Nitro method suffixes such as `[id].get.ts` for handlers. Read `DESIGN.md` before changing UI and use Nuxt UI semantic colors such as `text-default`. Reserve code comments for non-obvious constraints and link issues for workarounds.
 
+## Accessibility Scope
+
+Screen reader support is outside the project's current scope.
+
 ## Testing
 
 Use Vitest and name new files `*.test.ts`. Put pure-function tests in `test/unit/` and API integration tests in `test/nuxt/api/`. Run `bun run test:unit --run` or `bun run test:nuxt --run`. The Nuxt suite starts a server per file, runs serially, and needs a migrated local Postgres database. Assert API outcomes through `status.code` in the response body.

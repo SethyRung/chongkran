@@ -1,6 +1,6 @@
 # Chongkran redesign
 
-Status: ready for shared-understanding confirmation before implementation.
+This brief records the earlier direction. Use the [redesign boards](mockups/redesign/prompts.md) and [design system](../DESIGN.md) for current implementation.
 
 ## Confirmed direction
 
