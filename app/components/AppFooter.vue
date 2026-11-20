@@ -1,26 +1,13 @@
-<script setup lang="ts">
-const year = computed(() => new Date().getFullYear());
-</script>
-
 <template>
-  <UFooter class="border-t border-muted py-8">
-    <template #left>
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide:cooking-pot" class="text-primary size-6" />
-        <span class="font-semibold">Chongkran</span>
-      </div>
-    </template>
-
-    <template #default>
-      <p class="text-sm text-muted">© {{ year }} Chongkran. All rights reserved.</p>
-    </template>
-
-    <template #right>
-      <div class="flex items-center gap-4">
-        <NuxtLink to="https://sethyrung.com" class="text-sm text-muted hover:text-default">
-          About
-        </NuxtLink>
-      </div>
-    </template>
-  </UFooter>
+  <footer class="border-t border-neutral-800 bg-ink-950 text-cream-200">
+    <UContainer class="flex flex-wrap items-center justify-between gap-x-6 gap-y-4 py-5">
+      <NuxtLink to="/">
+        <BrandMark />
+      </NuxtLink>
+      <nav class="flex gap-6 text-sm font-semibold">
+        <NuxtLink to="/recipes" class="hover:underline">Recipes</NuxtLink>
+        <NuxtLink to="/categories" class="hover:underline">Categories</NuxtLink>
+      </nav>
+    </UContainer>
+  </footer>
 </template>
