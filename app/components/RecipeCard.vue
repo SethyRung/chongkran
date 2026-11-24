@@ -1,76 +1,68 @@
-<script lang="ts">
-interface RecipeCardProps {
-  recipe: RecipeResponse;
-}
-</script>
 <script setup lang="ts">
-const props = defineProps<RecipeCardProps>();
-
-const authorName = computed(() => props.recipe.authorName ?? "Unknown Author");
-const authorAvatar = computed(() => props.recipe.authorAvatar);
-
-const formatCookTime = (minutes: number) => {
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-};
-
-const recipeHref = computed(() => `/recipes/${props.recipe.id}`);
+const props = defineProps<{ recipe: RecipeResponse; compact?: boolean }>();
+const imageFailed = ref(false);
+watch(
+  () => props.recipe.image,
+  () => (imageFailed.value = false),
+);
+const { isSaved, loading, toggle } = useRecipeFavorite(() => props.recipe.id);
 </script>
 
 <template>
-  <NuxtLink
-    :to="recipeHref"
-    class="group flex flex-col rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-default"
-    :aria-label="`View recipe: ${recipe.title}`"
+  <article
+    :data-recipe-card="recipe.id"
+    class="group relative flex flex-col overflow-hidden rounded-md border border-default bg-elevated light:bg-cream-50"
   >
-    <div class="relative aspect-4/3 overflow-hidden rounded-xl bg-muted">
+    <NuxtLink
+      :to="`/recipes/${recipe.id}`"
+      tabindex="-1"
+      class="relative block overflow-hidden bg-muted"
+      :class="compact ? 'aspect-[2.65/1]' : 'aspect-[4/3]'"
+    >
       <img
+        v-if="recipe.image && !imageFailed"
         :src="recipe.image"
-        :alt="recipe.title"
+        alt=""
         loading="lazy"
-        class="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
+        data-recipe-card-photo
+        @error="imageFailed = true"
+        class="size-full object-cover transition-transform duration-300 motion-safe:group-hover:scale-105"
       />
+      <UIcon
+        v-else
+        name="i-lucide-cooking-pot"
+        class="absolute inset-0 m-auto size-12 text-dimmed"
+      />
+    </NuxtLink>
 
-      <div
-        class="absolute inset-x-3 bottom-3 flex items-center justify-between gap-2"
-        :aria-label="`Difficulty: ${recipe.difficulty}`"
-      >
-        <span
-          class="rounded-full bg-black/40 px-2.5 py-1 text-xs font-medium text-white capitalize backdrop-blur-sm"
-        >
-          {{ recipe.difficulty }}
-        </span>
-
-        <div
-          v-if="recipe.likes && recipe.likes > 0"
-          class="flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-xs text-white backdrop-blur-sm"
-        >
-          <UIcon name="i-lucide-heart" class="size-3 fill-current" />
-          <span>{{ recipe.likes }}</span>
-        </div>
+    <div class="flex flex-1 gap-2.5 p-3" :class="compact ? 'items-center' : 'items-start'">
+      <div class="min-w-0 flex-1">
+        <h3 class="font-display font-normal leading-[1.12] text-xl text-highlighted sm:text-2xl">
+          <NuxtLink :to="`/recipes/${recipe.id}`" class="hover:underline underline-offset-4">
+            {{ recipe.title }}
+          </NuxtLink>
+        </h3>
+        <p v-if="!compact" class="mt-1 truncate text-sm text-muted">
+          {{ recipe.authorName || "Community recipe" }}
+        </p>
+        <p v-if="!compact" class="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          <UIcon name="i-lucide-clock" class="size-4" /> {{ recipe.cookTime }} min
+          <span>·</span>
+          <span class="capitalize">{{ recipe.difficulty }}</span>
+        </p>
       </div>
-    </div>
-
-    <div class="flex flex-1 flex-col gap-2 pt-4">
-      <h3
-        class="line-clamp-2 text-lg font-semibold leading-snug text-highlighted transition-colors group-hover:text-primary"
-      >
-        {{ recipe.title }}
-      </h3>
-
-      <p v-if="recipe.description" class="line-clamp-2 text-sm leading-relaxed text-muted">
-        {{ recipe.description }}
+      <p v-if="compact" class="flex shrink-0 items-center gap-1 text-xs text-muted sm:text-sm">
+        <UIcon name="i-lucide-clock" class="size-4" /> {{ recipe.cookTime }} min
       </p>
-
-      <div class="mt-auto flex items-center gap-2 pt-2 text-sm text-muted">
-        <UAvatar :src="authorAvatar" :alt="authorName" size="2xs" />
-        <span class="truncate">{{ authorName }}</span>
-        <span aria-hidden="true" class="text-default/30">·</span>
-        <UIcon name="i-lucide-clock" class="size-3.5 shrink-0" />
-        <span>{{ formatCookTime(recipe.cookTime) }}</span>
-      </div>
+      <UButton
+        icon="i-lucide-heart"
+        :color="isSaved ? 'error' : 'neutral'"
+        variant="outline"
+        :class="{ 'light:bg-cream-200': !isSaved }"
+        :loading="loading"
+        :ui="{ leadingIcon: isSaved ? 'fill-current' : '' }"
+        @click="toggle"
+      />
     </div>
-  </NuxtLink>
+  </article>
 </template>

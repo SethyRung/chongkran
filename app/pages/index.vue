@@ -1,220 +1,132 @@
-<script lang="ts" setup>
-import { isSuccessResponse } from "#shared/utils";
-import type { CategoryResponse, RecipeResponse } from "#shared/types";
-import type { StatsResponse } from "~~/server/api/stats.get";
-
-useHead({
-  title: "Chongkran — Find a recipe worth cooking",
-  meta: [
-    {
-      name: "description",
-      content:
-        "Discover real recipes from a community of home cooks. Search by ingredient, browse by cuisine, save what you'll actually cook.",
-    },
-  ],
+<script setup lang="ts">
+useSeoMeta({
+  title: "Chongkran — What’s cooking?",
+  description: "Find recipes by ingredient, browse categories, and plan what to cook this week.",
 });
 
-const search = ref("");
+const { data: categories } = useLazyFetch("/api/categories", { query: { limit: 100 } });
+const {
+  data: popular,
+  status: popularStatus,
+  refresh: refreshPopular,
+} = useLazyFetch("/api/recipes/popular", { query: { limit: 3 } });
 
-const [{ data: statsRes }, { data: categoriesRes }, { data: popularRes }] = await Promise.all([
-  useFetch("/api/stats"),
-  useFetch("/api/categories", { query: { limit: 12 } }),
-  useFetch("/api/recipes/popular", { query: { limit: 8 } }),
-]);
-
-const stats = computed<StatsResponse | null>(() =>
-  isSuccessResponse(statsRes.value) ? statsRes.value.data : null,
+const tiles = computed(() =>
+  featuredCategories.map((feature) => {
+    const category = categories.value?.data?.find(({ name }) => feature.pattern.test(name));
+    const to = category ? `/categories/${category.id}` : { path: "/recipes", query: feature.query };
+    return { ...feature, to };
+  }),
 );
 
-const categories = computed<CategoryResponse[]>(() =>
-  isSuccessResponse(categoriesRes.value) ? categoriesRes.value.data : [],
-);
-
-const popularRecipes = computed<RecipeResponse[]>(() =>
-  isSuccessResponse(popularRes.value) ? popularRes.value.data : [],
-);
-
-const trendingTags = computed<string[]>(() => {
-  const counts = new Map<string, number>();
-  for (const recipe of popularRecipes.value) {
-    for (const tag of recipe.tags ?? []) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, 8)
-    .map(([tag]) => tag);
-});
-
-const hasStats = computed(() => {
-  if (!stats.value) return false;
-  return stats.value.recipes > 0 || stats.value.categories > 0 || stats.value.authors > 0;
-});
-
-const categoryIcons: Record<string, string> = {
-  Pasta: "i-lucide-utensils",
-  Asian: "i-lucide-utensils",
-  American: "i-lucide-beef",
-  Indian: "i-lucide-utensils",
-  Desserts: "i-lucide-cake",
-  Salads: "i-lucide-leaf",
-};
-
-function submitSearch() {
-  const q = search.value.trim();
-  navigateTo({ path: "/recipes", query: q ? { search: q } : {} });
-}
-
-function categoryIcon(name: string) {
-  return categoryIcons[name] ?? "i-lucide-utensils";
+function submitSearch(search: string) {
+  return navigateTo({ path: "/recipes", query: search ? { search } : {} });
 }
 </script>
 
 <template>
-  <div class="font-sans">
-    <section class="border-b border-default">
-      <UContainer class="py-16 sm:py-24 lg:py-32">
-        <div class="mx-auto max-w-3xl text-center space-y-8">
-          <h1 class="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight text-highlighted">
-            What are you cooking today?
-          </h1>
-          <p class="text-lg sm:text-xl text-muted">
-            Real recipes from people who actually cook them. Search an ingredient, pick a cuisine,
-            or browse what's popular.
-          </p>
-
-          <form
-            class="mx-auto flex w-full max-w-2xl items-center gap-2"
-            role="search"
-            @submit.prevent="submitSearch"
+  <HomeIntro>
+    <section class="relative isolate overflow-hidden bg-ink-950 text-cream-200">
+      <div
+        class="absolute inset-0 -z-10 bg-chili-700 [clip-path:polygon(0_100%,100%_52%,100%_100%)] lg:[clip-path:polygon(64%_0,100%_0,100%_100%,41%_100%)]"
+      />
+      <UContainer class="relative grid items-center lg:min-h-100 lg:grid-cols-[5fr_7fr]">
+        <div class="relative z-10 pt-8 pb-2 sm:pt-12 lg:py-12">
+          <h1
+            class="font-display font-normal uppercase mb-5 text-[clamp(3.75rem,13vw,6.5rem)] leading-[0.98] lg:text-[clamp(5.25rem,8.1vw,8.5rem)]"
           >
-            <UInput
-              v-model="search"
-              name="search"
-              placeholder="Search recipes, ingredients, cuisines…"
-              icon="i-lucide-search"
-              size="xl"
-              class="flex-1"
-              :ui="{ base: 'w-full' }"
-            />
-            <UButton type="submit" size="xl" icon="i-lucide-arrow-right" label="Search" />
-          </form>
-
-          <div v-if="trendingTags.length" class="flex flex-wrap items-center justify-center gap-2">
-            <span class="text-sm text-muted">Popular:</span>
-            <UButton
-              v-for="tag in trendingTags"
-              :key="tag"
-              :to="{ path: '/recipes', query: { search: tag } }"
-              variant="subtle"
-              color="neutral"
-              size="sm"
-              :label="tag"
-            />
-          </div>
-
-          <div class="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <UButton
-              to="/recipes"
-              variant="ghost"
-              color="neutral"
-              trailing-icon="i-lucide-chevron-right"
-              label="Browse all recipes"
-            />
-          </div>
+            <span class="block overflow-hidden">
+              <span data-intro-heading class="block">What’s</span>
+            </span>
+            <span class="block overflow-hidden text-turmeric-400">
+              <span data-intro-heading class="block">Cooking?</span>
+            </span>
+          </h1>
+          <RecipeSearch hero data-intro-detail @search="submitSearch" />
         </div>
+
+        <figure
+          data-intro-detail
+          class="relative isolate -mx-4 min-h-42 self-stretch sm:-mx-6 lg:mx-0 lg:min-h-0"
+        >
+          <img
+            src="/images/food/nom-banh-chok.webp"
+            alt="Nom banh chok, Cambodian rice noodles with green fish curry and fresh herbs"
+            width="1200"
+            height="800"
+            fetchpriority="high"
+            class="mx-auto -mt-2 block h-56 w-full object-contain object-center sm:h-76 lg:absolute lg:inset-0 lg:mt-0 lg:size-full lg:scale-110"
+          />
+          <figcaption
+            class="relative flex justify-end px-4 pb-4 sm:px-6 lg:absolute lg:right-0 lg:bottom-1 lg:p-0"
+          >
+            <NuxtLink
+              :to="{ path: '/recipes', query: { search: 'Nom banh chok' } }"
+              class="inline-flex items-center gap-1.5 rounded-sm bg-ink-950/85 px-2.5 py-1 text-sm font-semibold underline underline-offset-4"
+            >
+              Nom banh chok <UIcon name="i-lucide-arrow-up-right" class="size-4" />
+            </NuxtLink>
+          </figcaption>
+        </figure>
       </UContainer>
     </section>
 
-    <section v-if="categories.length" class="border-b border-default">
-      <UContainer class="py-12 sm:py-16">
-        <div class="mb-8 flex items-end justify-between gap-4">
-          <div>
-            <h2 class="text-2xl sm:text-3xl font-bold text-highlighted">Browse by cuisine</h2>
-            <p class="mt-1 text-muted">Pick a category to see what's cooking.</p>
-          </div>
-          <UButton
-            to="/categories"
-            variant="ghost"
-            color="neutral"
-            trailing-icon="i-lucide-chevron-right"
-            label="All categories"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-          <NuxtLink
-            v-for="category in categories"
-            :key="category.id"
-            :to="`/recipes?category=${category.id}`"
-            class="block"
+    <UContainer class="space-y-6 py-5 sm:space-y-5 sm:py-5">
+      <section>
+        <div class="mb-3 flex items-center justify-between gap-4">
+          <h2
+            id="home-categories"
+            class="font-display font-normal leading-[1.12] text-2xl text-highlighted sm:text-4xl"
           >
-            <UCard
-              :ui="{
-                root: 'group cursor-pointer transition-all hover:ring-2 hover:ring-primary h-full',
-                body: 'p-5',
-              }"
-            >
-              <div class="flex flex-col items-center gap-3 text-center">
-                <div
-                  class="flex size-12 items-center justify-center rounded-full bg-primary/10 transition-colors group-hover:bg-primary/20"
-                >
-                  <UIcon :name="categoryIcon(category.name)" class="size-6 text-primary" />
-                </div>
-                <h3 class="font-semibold group-hover:text-primary transition-colors">
-                  {{ category.name }}
-                </h3>
-                <p v-if="typeof category.recipeCount === 'number'" class="text-xs text-muted">
-                  {{ category.recipeCount }}
-                  {{ category.recipeCount === 1 ? "recipe" : "recipes" }}
-                </p>
-              </div>
-            </UCard>
+            Browse categories
+          </h2>
+          <NuxtLink
+            to="/categories"
+            class="inline-flex shrink-0 items-center gap-1 text-sm font-semibold text-highlighted underline underline-offset-4"
+          >
+            All categories <UIcon name="i-lucide-arrow-right" class="size-4" />
           </NuxtLink>
         </div>
-      </UContainer>
-    </section>
-
-    <section v-if="popularRecipes.length" class="border-b border-default">
-      <UContainer class="py-12 sm:py-16">
-        <div class="mb-8 flex items-end justify-between gap-4">
-          <div>
-            <h2 class="text-2xl sm:text-3xl font-bold text-highlighted">Popular right now</h2>
-            <p class="mt-1 text-muted">The recipes people are cooking the most.</p>
-          </div>
-          <UButton
-            to="/recipes"
-            variant="ghost"
-            color="neutral"
-            trailing-icon="i-lucide-chevron-right"
-            label="See all"
+        <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <CategoryTile
+            v-for="tile in tiles"
+            :key="tile.label"
+            :name="tile.label"
+            :to="tile.to"
+            :image="tile.image"
+            :tone="tile.tone"
           />
         </div>
+      </section>
 
-        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          <RecipeCard v-for="recipe in popularRecipes" :key="recipe.id" :recipe="recipe" />
+      <section>
+        <h2
+          id="home-popular"
+          class="font-display font-normal leading-[1.12] mb-3 text-2xl text-highlighted sm:text-4xl"
+        >
+          Popular recipes
+        </h2>
+        <div
+          v-if="popularStatus === 'idle' || popularStatus === 'pending'"
+          class="grid gap-4 sm:grid-cols-3"
+        >
+          <USkeleton v-for="index in 3" :key="index" class="h-56" />
         </div>
-      </UContainer>
-    </section>
-
-    <section v-if="hasStats">
-      <UContainer class="py-12 sm:py-16">
-        <div class="grid grid-cols-3 gap-4">
-          <div class="text-center">
-            <p class="text-2xl sm:text-3xl font-bold text-highlighted">{{ stats?.recipes }}</p>
-            <p class="mt-1 text-sm text-muted">Recipes</p>
-          </div>
-          <div class="text-center">
-            <p class="text-2xl sm:text-3xl font-bold text-highlighted">{{ stats?.categories }}</p>
-            <p class="mt-1 text-sm text-muted">Categories</p>
-          </div>
-          <div class="text-center">
-            <p class="text-2xl sm:text-3xl font-bold text-highlighted">{{ stats?.authors }}</p>
-            <p class="mt-1 text-sm text-muted">Authors</p>
-          </div>
+        <UAlert
+          v-else-if="popularStatus === 'error'"
+          title="Couldn’t load popular recipes"
+          color="error"
+          variant="soft"
+          :actions="[{ label: 'Try again', onClick: () => refreshPopular() }]"
+        />
+        <div v-else-if="popular?.data?.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <RecipeCard v-for="recipe in popular.data" :key="recipe.id" :recipe="recipe" compact />
         </div>
-      </UContainer>
-    </section>
-  </div>
+        <div v-else class="rounded-md border border-default bg-elevated light:bg-cream-50 p-6">
+          <p class="mb-3 text-muted">Popular recipes will appear here as cooks share them.</p>
+          <UButton to="/recipes" label="Browse recipes" trailing-icon="i-lucide-arrow-right" />
+        </div>
+      </section>
+    </UContainer>
+  </HomeIntro>
 </template>
