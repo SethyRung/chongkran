@@ -56,6 +56,7 @@ export default defineNuxtConfig({
   routeRules: {
     "/admin/**": { auth: { user: { role: "admin" } } },
     "/profile/**": { auth: "user" },
+    "/profile/settings": { redirect: "/profile?settings=open" },
     "/meal-plans/**": { auth: "user" },
     "/shopping-lists/**": { auth: "user" },
     "/auth/**": { auth: "guest" },

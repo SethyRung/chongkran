@@ -1,122 +1,112 @@
 <script setup lang="ts">
-const { user } = useUserSession();
+const { user, fetchSession } = useUserSession();
+const toast = useToast();
+const requestingAuthorAccess = ref(false);
 
-const { data: stats } = await useFetch(`/api/follows/stats/${user.value?.id}`, {
-  lazy: true,
+const { data: stats } = useLazyFetch(() => `/api/follows/stats/${user.value?.id}`);
+const {
+  data: favorites,
+  status: favoritesStatus,
+  refresh: refreshFavorites,
+} = useLazyFetch("/api/favorites", {
+  query: { limit: 6 },
+});
+const { data: published } = useLazyFetch("/api/recipes/my", {
+  query: { limit: 1, status: "approved" },
 });
 
-const followersCount = computed(() => stats.value?.data?.followersCount ?? 0);
-const followingCount = computed(() => stats.value?.data?.followingCount ?? 0);
+const cards = computed(() => [
+  {
+    label: "Recipes",
+    value: isSuccessResponse(published.value) ? (published.value.meta?.total ?? 0) : 0,
+  },
+  { label: "Followers", value: stats.value?.data?.followersCount ?? 0 },
+  { label: "Following", value: stats.value?.data?.followingCount ?? 0 },
+]);
+
+async function requestAuthorAccess() {
+  if (requestingAuthorAccess.value) return;
+  requestingAuthorAccess.value = true;
+  try {
+    const result = await $fetch("/api/users/become-author", { method: "PUT" });
+    if (!isSuccessResponse(result)) throw new Error(result.status.message);
+    await fetchSession({ force: true });
+    toast.add({ title: "Author request submitted", color: "success" });
+  } catch {
+    toast.add({ title: "Couldn’t submit the request", color: "error" });
+  } finally {
+    requestingAuthorAccess.value = false;
+  }
+}
 </script>
 
 <template>
-  <div class="space-y-8">
-    <div class="grid grid-cols-2 gap-4 md:grid-cols-4">
-      <UCard class="text-center">
-        <div class="flex flex-col items-center gap-2">
-          <div class="flex size-10 items-center justify-center rounded-full bg-primary/10">
-            <UIcon name="i-lucide-book-open" class="size-5 text-primary" />
-          </div>
-          <span class="text-2xl font-bold">—</span>
-          <span class="text-sm text-muted">Recipes</span>
-        </div>
-      </UCard>
-
-      <UCard class="text-center">
-        <div class="flex flex-col items-center gap-2">
-          <div class="flex size-10 items-center justify-center rounded-full bg-primary/10">
-            <UIcon name="i-lucide-heart" class="size-5 text-primary" />
-          </div>
-          <span class="text-2xl font-bold">{{ followersCount }}</span>
-          <span class="text-sm text-muted">Followers</span>
-        </div>
-      </UCard>
-
-      <UCard class="text-center">
-        <div class="flex flex-col items-center gap-2">
-          <div class="flex size-10 items-center justify-center rounded-full bg-primary/10">
-            <UIcon name="i-lucide-users" class="size-5 text-primary" />
-          </div>
-          <span class="text-2xl font-bold">{{ followingCount }}</span>
-          <span class="text-sm text-muted">Following</span>
-        </div>
-      </UCard>
-
-      <UCard class="text-center">
-        <div class="flex flex-col items-center gap-2">
-          <div class="flex size-10 items-center justify-center rounded-full bg-primary/10">
-            <UIcon name="i-lucide-eye" class="size-5 text-primary" />
-          </div>
-          <span class="text-2xl font-bold">—</span>
-          <span class="text-sm text-muted">Total Views</span>
-        </div>
-      </UCard>
-    </div>
-
-    <div class="grid gap-6 md:grid-cols-2">
-      <UCard>
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-user" class="size-5 text-primary" />
-            <h3 class="font-semibold">About</h3>
-          </div>
+  <div class="space-y-7">
+    <dl class="grid grid-cols-3 gap-2 sm:gap-4">
+      <div
+        v-for="card in cards"
+        :key="card.label"
+        class="rounded-md border border-default bg-elevated light:bg-cream-50 p-3 sm:p-4"
+      >
+        <dt class="text-sm font-medium text-muted">{{ card.label }}</dt>
+        <dd class="font-display font-normal leading-[1.12] mt-1 text-3xl">{{ card.value }}</dd>
+      </div>
+    </dl>
+    <UAlert
+      v-if="user?.role === 'user' && user.authorRequestStatus === 'pending'"
+      title="Author request pending"
+      variant="soft"
+      color="warning"
+    />
+    <UButton
+      v-else-if="user?.role === 'user'"
+      label="Apply to become an author"
+      icon="i-lucide-user-plus"
+      color="neutral"
+      variant="outline"
+      :loading="requestingAuthorAccess"
+      @click="requestAuthorAccess"
+    />
+    <section>
+      <h2 id="saved-recipes" class="font-display font-normal leading-[1.12] mb-4 text-3xl">
+        Saved recipes
+      </h2>
+      <USkeleton v-if="favoritesStatus === 'idle' || favoritesStatus === 'pending'" class="h-48" />
+      <UAlert
+        v-else-if="favoritesStatus === 'error'"
+        title="Couldn’t load saved recipes"
+        color="error"
+        variant="soft"
+        :actions="[{ label: 'Try again', onClick: () => refreshFavorites() }]"
+      />
+      <div v-else-if="favorites?.data?.length" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <RecipeCard v-for="recipe in favorites.data" :key="recipe.id" :recipe="recipe" compact />
+      </div>
+      <UEmpty
+        v-else
+        :as="{ title: 'h3' }"
+        title="No saved recipes"
+        description="Select the heart on any recipe to save it here."
+        class="gap-4 rounded-md bg-elevated light:bg-cream-100"
+        :ui="{
+          title: 'font-display text-2xl leading-[1.12] font-normal sm:text-3xl',
+          body: 'w-full max-w-64',
+          actions: 'w-full',
+        }"
+      >
+        <template #leading>
+          <UIcon name="i-lucide-heart" class="size-8 text-highlighted" />
         </template>
 
-        <div class="space-y-3">
-          <div class="flex items-center gap-3">
-            <UIcon name="i-lucide-mail" class="size-4 text-muted" />
-            <span class="text-sm">{{ user?.email }}</span>
-          </div>
-          <div class="flex items-center gap-3">
-            <UIcon name="i-lucide-shield" class="size-4 text-muted" />
-            <UBadge
-              :color="
-                user?.role === 'admin' ? 'error' : user?.role === 'author' ? 'primary' : 'neutral'
-              "
-              variant="subtle"
-              class="capitalize"
-            >
-              {{ user?.role }}
-            </UBadge>
-          </div>
-          <div v-if="user?.bio" class="flex items-start gap-3">
-            <UIcon name="i-lucide-file-text" class="mt-0.5 size-4 text-muted" />
-            <p class="text-sm text-muted">{{ user.bio }}</p>
-          </div>
-          <div v-if="!user?.bio" class="flex items-start gap-3">
-            <UIcon name="i-lucide-file-text" class="mt-0.5 size-4 text-muted" />
-            <p class="text-sm italic text-muted">No bio yet</p>
-          </div>
-        </div>
-      </UCard>
-
-      <UCard>
-        <template #header>
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-sparkles" class="size-5 text-primary" />
-            <h3 class="font-semibold">Quick Actions</h3>
-          </div>
+        <template #actions>
+          <UButton
+            to="/recipes"
+            label="Browse recipes"
+            trailing-icon="i-lucide-arrow-right"
+            class="font-display"
+          />
         </template>
-
-        <div class="flex flex-col gap-2">
-          <UButton
-            to="/profile/recipes"
-            label="View My Recipes"
-            icon="i-lucide-book-open"
-            variant="soft"
-            color="neutral"
-            block
-          />
-          <UButton
-            to="/profile/settings"
-            label="Edit Profile"
-            icon="i-lucide-settings"
-            variant="soft"
-            color="neutral"
-            block
-          />
-        </div>
-      </UCard>
-    </div>
+      </UEmpty>
+    </section>
   </div>
 </template>
