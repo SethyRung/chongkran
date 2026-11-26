@@ -2,7 +2,14 @@
 import type { FormSubmitEvent } from "@nuxt/ui";
 import { z } from "zod";
 
+const emit = defineEmits<{ saved: []; draft: [draft: RecipeDraft | undefined] }>();
 const open = ref(false);
+const formId = useId();
+const { user } = useUserSession();
+const draftReady = ref(false);
+const draftError = ref("");
+const submitting = ref(false);
+const savingDraft = ref(false);
 
 const toast = useToast();
 
@@ -23,7 +30,7 @@ const schema = z.object({
   cookTime: z
     .number("Cook time must be at least 1 minute")
     .min(1, "Cook time must be at least 1 minute"),
-  tags: z.array(z.string()),
+  tags: z.array(z.string()).default([]),
 });
 
 type Schema = z.output<typeof schema>;
@@ -47,7 +54,9 @@ const state = reactive<
 >({
   ingredients: [{}],
   steps: [{}],
+  tags: [],
 });
+const imagePreview = useObjectUrl(toRef(state, "image"));
 
 const difficultyOptions = [
   { label: "Easy", value: "easy" },
@@ -58,15 +67,89 @@ const difficultyOptions = [
 const { data: categories, execute } = await useFetch("/api/categories", {
   lazy: true,
   immediate: false,
+  query: { limit: 100 },
   default: () => [],
   transform: (res) => (res.status.code === ApiResponseCode.Success ? res.data : []),
 });
 
-watch(open, () => {
-  if (open.value) {
-    execute();
+watch(open, async (isOpen) => {
+  if (!isOpen) {
+    if (draftReady.value && !submitting.value && !savingDraft.value) await persistDraft();
+    draftReady.value = false;
+    return;
+  }
+
+  const account = user.value?.id;
+  draftError.value = "";
+  resetForm();
+  void execute();
+  try {
+    const draft = account ? await readRecipeDraft(account) : undefined;
+    if (open.value && user.value?.id === account && draft) Object.assign(state, draft);
+  } catch {
+    draftError.value = "Couldn’t read local drafts.";
+  } finally {
+    draftReady.value = open.value;
   }
 });
+
+function snapshot(): RecipeDraft {
+  return {
+    title: state.title,
+    description: state.description,
+    category: state.category,
+    difficulty: state.difficulty,
+    cookTime: state.cookTime,
+    image: state.image,
+    tags: [...(state.tags ?? [])],
+    ingredients: state.ingredients?.map(({ name, quantity }) => ({ name, quantity })),
+    steps: state.steps?.map(({ text }) => ({ text })),
+  };
+}
+
+async function persistDraft() {
+  const account = user.value?.id;
+  if (!account) return false;
+  const draft = snapshot();
+  if (
+    !draft.title &&
+    !draft.description &&
+    !draft.image &&
+    !draft.category &&
+    !draft.difficulty &&
+    !draft.cookTime &&
+    !draft.tags?.length &&
+    !draft.ingredients?.some(({ name, quantity }) => name || quantity) &&
+    !draft.steps?.some(({ text }) => text)
+  )
+    return true;
+  try {
+    await writeRecipeDraft(account, draft);
+    if (user.value?.id === account) emit("draft", draft);
+    return true;
+  } catch {
+    draftError.value = "Couldn’t save this draft on this device.";
+    return false;
+  }
+}
+
+watchDebounced(
+  state,
+  () => {
+    if (open.value && draftReady.value && !submitting.value && !savingDraft.value)
+      void persistDraft();
+  },
+  { deep: true, debounce: 350 },
+);
+
+async function saveAndClose() {
+  savingDraft.value = true;
+  if (await persistDraft()) {
+    draftReady.value = false;
+    open.value = false;
+  }
+  savingDraft.value = false;
+}
 
 function addIngredient() {
   if (state.ingredients) {
@@ -96,11 +179,14 @@ function removeStep(index: number) {
   }
 }
 
-const loading = ref(false);
+const submittingLabel = ref("Submit for review");
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
   try {
-    loading.value = true;
+    if (submitting.value) return;
+    submitting.value = true;
+    draftError.value = "";
+    submittingLabel.value = "Uploading image…";
     const { data } = event;
 
     const formData = new FormData();
@@ -121,6 +207,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       return;
     }
 
+    submittingLabel.value = "Submitting recipe…";
     const res = await $fetch("/api/recipes", {
       method: "POST",
       body: {
@@ -138,8 +225,22 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         color: "success",
         icon: "i-lucide-check-circle",
       });
+      const account = user.value?.id;
+      if (account) {
+        try {
+          await writeRecipeDraft(account, undefined);
+          emit("draft", undefined);
+        } catch {
+          toast.add({
+            title: "Recipe submitted. The local draft could not be cleared.",
+            color: "warning",
+          });
+        }
+      }
+      draftReady.value = false;
       open.value = false;
       resetForm();
+      emit("saved");
     } else {
       toast.add({
         title: "Failed to create recipe",
@@ -156,7 +257,8 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       icon: "i-lucide-alert-circle",
     });
   } finally {
-    loading.value = false;
+    submitting.value = false;
+    submittingLabel.value = "Submit for review";
   }
 }
 
@@ -178,200 +280,240 @@ function resetForm() {
 <template>
   <UModal
     v-model:open="open"
-    title="Create Recipe"
-    description="Share your culinary creation with the community"
-    scrollable
-    :ui="{ content: 'sm:max-w-3xl' }"
+    title="Create recipe"
+    :close="{ disabled: submitting || savingDraft }"
+    :dismissible="!submitting && !savingDraft"
+    :ui="{
+      content: 'sm:max-w-3xl',
+      title: 'font-display text-3xl font-normal uppercase',
+      footer: 'flex-wrap justify-end gap-2',
+    }"
   >
     <slot />
 
-    <template #body="{ close }">
-      <UForm :schema="schema" :state="state" class="space-y-6" @submit="onSubmit">
-        <div class="space-y-4">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-muted">
-            Basic Information
-          </h3>
+    <template #body>
+      <UForm :id="formId" :schema="schema" :state="state" @submit="onSubmit">
+        <UTheme
+          :ui="{
+            input: { root: 'w-full', base: 'min-h-11 text-base sm:text-sm' },
+            textarea: { root: 'w-full', base: 'text-base sm:text-sm' },
+            selectMenu: { base: 'min-h-11 w-full text-base sm:text-sm' },
+            inputTags: { root: 'min-h-11 w-full' },
+            inputNumber: { root: 'w-full', base: 'min-h-11 text-base sm:text-sm' },
+          }"
+        >
+          <div class="space-y-6">
+            <UAlert v-if="draftError" :title="draftError" color="error" variant="soft" />
 
-          <UFormField name="title" label="Recipe Title" required>
-            <UInput v-model="state.title" placeholder="e.g., Classic Carbonara" class="w-full" />
-          </UFormField>
+            <section class="space-y-4">
+              <h3 class="font-display text-2xl leading-[1.12] font-normal">Details</h3>
 
-          <UFormField name="description" label="Description">
-            <UTextarea
-              v-model="state.description"
-              placeholder="Describe your recipe..."
-              :rows="5"
-              autoresize
-              class="w-full"
-            />
-          </UFormField>
+              <div class="grid gap-4 sm:grid-cols-[10rem_minmax(0,1fr)] sm:gap-5">
+                <UFormField
+                  name="image"
+                  label="Recipe photo"
+                  help="PNG, JPEG, GIF or WebP. Max 2 MB."
+                  required
+                >
+                  <UFileUpload
+                    v-model="state.image"
+                    position="outside"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    :ui="{
+                      base: 'overflow-hidden rounded-md bg-elevated p-0 light:bg-cream-100',
+                      wrapper: 'relative min-h-40 gap-2 p-3',
+                      label: 'relative mt-0',
+                    }"
+                  >
+                    <template #leading>
+                      <img
+                        v-if="imagePreview"
+                        :src="imagePreview"
+                        alt=""
+                        class="absolute inset-0 size-full object-cover"
+                      />
+                      <UIcon v-else name="i-lucide-camera" class="size-7 text-toned" />
+                    </template>
 
-          <div class="grid grid-cols-2 gap-4">
-            <UFormField name="category" label="Category" required>
-              <USelectMenu
-                v-model="state.category"
-                :items="categories ?? []"
-                placeholder="Select category"
-                label-key="name"
-                value-key="id"
-                class="w-full"
-              />
-            </UFormField>
+                    <template #label>
+                      <span
+                        :class="
+                          imagePreview && 'rounded-sm bg-ink-950/80 px-2.5 py-1 text-cream-200'
+                        "
+                      >
+                        {{ imagePreview ? "Change photo" : "Upload photo" }}
+                      </span>
+                    </template>
 
-            <UFormField label="Tags" name="tags">
-              <UInputTags
-                v-model="state.tags"
-                placeholder="Add tags (press Enter)"
-                class="w-full"
-              />
-            </UFormField>
+                    <template #files="{ removeFile }">
+                      <UButton
+                        label="Remove photo"
+                        icon="i-lucide-x"
+                        color="neutral"
+                        variant="ghost"
+                        size="sm"
+                        @click="removeFile()"
+                      />
+                    </template>
+                  </UFileUpload>
+                </UFormField>
 
-            <UFormField name="difficulty" label="Difficulty" required>
-              <USelectMenu
-                v-model="state.difficulty"
-                :items="difficultyOptions"
-                placeholder="Select difficulty"
-                value-key="value"
-                class="w-full"
-              />
-            </UFormField>
+                <div class="grid min-w-0 gap-4 sm:grid-cols-2">
+                  <UFormField name="title" label="Recipe title" required class="sm:col-span-2">
+                    <UInput v-model="state.title" placeholder="e.g., Chicken curry" />
+                  </UFormField>
 
-            <UFormField name="cookTime" label="Cook Time (minutes)" required>
-              <UInputNumber
-                v-model="state.cookTime"
-                :min="1"
-                orientation="vertical"
-                class="w-full"
-              />
-            </UFormField>
-          </div>
-        </div>
+                  <UFormField name="category" label="Category" required>
+                    <USelectMenu
+                      v-model="state.category"
+                      :items="categories ?? []"
+                      placeholder="Select category"
+                      label-key="name"
+                      value-key="id"
+                    />
+                  </UFormField>
 
-        <USeparator />
+                  <UFormField name="difficulty" label="Difficulty" required>
+                    <USelectMenu
+                      v-model="state.difficulty"
+                      :items="difficultyOptions"
+                      placeholder="Select difficulty"
+                      value-key="value"
+                    />
+                  </UFormField>
 
-        <div class="space-y-4">
-          <h3 class="text-xs font-semibold uppercase tracking-wider text-muted">Recipe Image</h3>
+                  <UFormField name="cookTime" label="Cook time (minutes)" required>
+                    <UInputNumber v-model="state.cookTime" :min="1" orientation="vertical" />
+                  </UFormField>
 
-          <UFormField name="image">
-            <UFileUpload
-              v-model="state.image"
-              label="Drop your image here"
-              description="SVG, PNG, JPG or GIF (max. 2MB)"
-              layout="list"
-              accept="image/*"
-              class="w-full min-h-48"
-            />
-          </UFormField>
-        </div>
+                  <UFormField name="tags" label="Tags">
+                    <UInputTags v-model="state.tags" placeholder="Add tags (press Enter)" />
+                  </UFormField>
 
-        <USeparator />
+                  <UFormField name="description" label="Description" class="sm:col-span-2">
+                    <UTextarea
+                      v-model="state.description"
+                      placeholder="Describe your recipe"
+                      :rows="3"
+                      autoresize
+                    />
+                  </UFormField>
+                </div>
+              </div>
+            </section>
 
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-muted">Ingredients</h3>
-            <UButton
-              label="Add Ingredient"
-              icon="i-lucide-plus"
-              variant="ghost"
-              size="sm"
-              @click="addIngredient"
-            />
-          </div>
-
-          <div class="grid grid-cols-[1fr_128px_auto] items-start gap-2">
-            <UForm
-              v-for="(ingredient, index) in state.ingredients"
-              :key="index"
-              :name="`ingredients.${index}`"
-              :schema="ingredientSchema"
-              nested
-              class="contents"
-            >
-              <UFormField name="name" class="flex-1">
-                <UInput v-model="ingredient.name" placeholder="Ingredient name" class="w-full" />
-              </UFormField>
-
-              <UFormField name="quantity" class="w-32">
-                <UInput v-model="ingredient.quantity" placeholder="Qty" />
-              </UFormField>
-
-              <UButton
-                v-if="index > 0"
-                icon="i-lucide-trash"
-                variant="ghost"
-                color="error"
-                @click="removeIngredient(index)"
-              />
-              <div v-else></div>
-            </UForm>
-          </div>
-        </div>
-
-        <USeparator />
-
-        <div class="space-y-4">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-muted">Steps</h3>
-            <UButton
-              label="Add Step"
-              icon="i-lucide-plus"
-              variant="ghost"
-              size="sm"
-              @click="addStep"
-            />
-          </div>
-
-          <div class="grid grid-cols-[auto_1fr_auto] items-start gap-2">
-            <UForm
-              v-for="(step, index) in state.steps"
-              :key="index"
-              :name="`steps.${index}`"
-              :schema="stepSchema"
-              nested
-              class="contents"
-            >
-              <div
-                class="mt-1 flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium"
-              >
-                {{ index + 1 }}
+            <section class="space-y-3 border-t border-default pt-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="font-display text-2xl leading-[1.12] font-normal">Ingredients</h3>
+                <UButton
+                  label="Add ingredient"
+                  icon="i-lucide-plus"
+                  color="neutral"
+                  variant="outline"
+                  class="min-h-10 cursor-pointer"
+                  @click="addIngredient"
+                />
               </div>
 
-              <UFormField name="text" class="flex-1">
-                <UTextarea
-                  v-model="step.text"
-                  :placeholder="`Step ${index + 1}`"
-                  :rows="2"
-                  autoresize
-                  class="w-full"
+              <UForm
+                v-for="(ingredient, index) in state.ingredients"
+                :key="index"
+                :name="`ingredients.${index}`"
+                :schema="ingredientSchema"
+                nested
+                class="grid grid-cols-[minmax(0,1fr)_minmax(0,0.65fr)_2.5rem] items-start gap-2 rounded-md border border-default p-3 sm:gap-3"
+              >
+                <UFormField name="name" label="Ingredient" class="min-w-0">
+                  <UInput v-model="ingredient.name" placeholder="e.g., Chicken thigh" />
+                </UFormField>
+
+                <UFormField name="quantity" label="Amount" class="min-w-0">
+                  <UInput v-model="ingredient.quantity" placeholder="e.g., 500 g" />
+                </UFormField>
+
+                <UButton
+                  v-if="index > 0"
+                  title="Remove ingredient"
+                  icon="i-lucide-trash"
+                  variant="ghost"
+                  color="error"
+                  class="mt-6 min-h-11 justify-center"
+                  @click="removeIngredient(index)"
                 />
-              </UFormField>
+              </UForm>
+            </section>
 
-              <UButton
-                v-if="index > 0"
-                icon="i-lucide-trash"
-                variant="ghost"
-                color="error"
-                class="mt-1"
-                @click="removeStep(index)"
-              />
-              <div v-else></div>
-            </UForm>
+            <section class="space-y-3 border-t border-default pt-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h3 class="font-display text-2xl leading-[1.12] font-normal">Steps</h3>
+                <UButton
+                  label="Add step"
+                  icon="i-lucide-plus"
+                  color="neutral"
+                  variant="outline"
+                  class="min-h-10 cursor-pointer"
+                  @click="addStep"
+                />
+              </div>
+
+              <UForm
+                v-for="(step, index) in state.steps"
+                :key="index"
+                :name="`steps.${index}`"
+                :schema="stepSchema"
+                nested
+                class="flex items-start gap-2 rounded-md border border-default p-3 sm:gap-3"
+              >
+                <span
+                  class="grid size-8 shrink-0 place-items-center font-display text-base text-highlighted"
+                >
+                  {{ index + 1 }}
+                </span>
+
+                <UFormField name="text" class="min-w-0 flex-1">
+                  <UTextarea
+                    v-model="step.text"
+                    :placeholder="`Describe step ${index + 1}`"
+                    :rows="2"
+                    autoresize
+                  />
+                </UFormField>
+
+                <UButton
+                  v-if="index > 0"
+                  title="Remove step"
+                  icon="i-lucide-trash"
+                  variant="ghost"
+                  color="error"
+                  class="min-h-11"
+                  @click="removeStep(index)"
+                />
+              </UForm>
+            </section>
           </div>
-        </div>
-
-        <USeparator />
-
-        <div class="flex justify-between gap-3">
-          <UButton label="Cancel" color="neutral" variant="subtle" @click="close" />
-
-          <UButton
-            type="submit"
-            label="Create Recipe"
-            icon="i-lucide-chef-hat"
-            :loading="loading"
-          />
-        </div>
+        </UTheme>
       </UForm>
+    </template>
+
+    <template #footer>
+      <UButton
+        label="Save draft &amp; close"
+        color="neutral"
+        variant="ghost"
+        class="font-display"
+        :disabled="submitting"
+        :loading="savingDraft"
+        @click="saveAndClose"
+      />
+
+      <UButton
+        :form="formId"
+        type="submit"
+        :label="submittingLabel"
+        class="font-display"
+        :loading="submitting"
+        :disabled="savingDraft || !draftReady"
+      />
     </template>
   </UModal>
 </template>
